@@ -5,7 +5,7 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.secret_key = "clean_final_2026"
 ANIMATION_PASSWORD = "Shrikanta@1432"
-ADMIN_PASSWORD = "Admin123"
+ADMIN_PASSWORD = "Teka@#2607"
 UPLOAD_FOLDER = "uploads"
 DATABASE = "database.db"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
