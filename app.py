@@ -4,15 +4,15 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = "pro_version_2.0"
+app.secret_key = "pro_version_final"
 
-# ==== YAHAN SE NAAM BADAL SAKTE HO ====
+# ==== PASSWORD YAHI HAI ====
+ANIMATION_PASSWORD = "Shrikanta@1432"  # Protective Password
+ADMIN_PASSWORD = "Teka@#2607"          # Admin Password
 APP_NAME = "MY APP"
 APP_LOGO = "🎉"
-# =====================================
+# ===========================
 
-ANIMATION_PASSWORD = "Shrikanta@1432"
-ADMIN_PASSWORD = "Teka@#2607"
 UPLOAD_FOLDER = "uploads"
 DATABASE = "database.db"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -26,8 +26,10 @@ def get_db():
 def init_db():
     with app.app_context():
         db = get_db()
+        try: db.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
+        except: pass
         db.execute('CREATE TABLE IF NOT EXISTS users (mobile TEXT PRIMARY KEY, full_name TEXT, gender TEXT, dob TEXT, email TEXT, password TEXT, forget_code TEXT, bio TEXT, last_seen TEXT)')
-        db.execute('CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY AUTOINCREMENT, mobile TEXT, full_name TEXT, caption TEXT, filename TEXT, likes INTEGER DEFAULT 0)')
+        db.execute('CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY AUTOINCREMENT, mobile TEXT, full_name TEXT, caption TEXT, filename TEXT)')
         db.execute('CREATE TABLE IF NOT EXISTS likes (post_id INTEGER, mobile TEXT, PRIMARY KEY(post_id,mobile))')
         db.execute('CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, full_name TEXT, comment TEXT)')
         db.execute('CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT, receiver TEXT, msg TEXT)')
@@ -65,9 +67,22 @@ button{padding:10px 16px;border:none;border-radius:12px;font-weight:600;cursor:p
 </style>
 """
 
-@app.route('/')
+# ==== PROTECTIVE LOCK ====
+@app.route('/', methods=['GET','POST'])
 def home():
-    return STYLE + f"<div class='card'><div style='font-size:50px'>{APP_LOGO}</div><h1 style='color:#2b6cff'>{APP_NAME}</h1><a href='/register'><button class='primary'>REGISTER</button></a><br><br><a href='/login'><button class='btn2' style='width:100%'>LOGIN</button></a></div>"
+    if request.method=='POST':
+        if request.form.get('pass')==ANIMATION_PASSWORD:
+            session['unlocked']=True
+            return redirect('/main')
+        return STYLE + "<div class='card'><h3>❌ Wrong Protective Password</h3><a href='/'>Try Again</a></div>"
+    if session.get('unlocked'):
+        return redirect('/main')
+    return STYLE + f"<div class='card'><div style='font-size:50px'>{APP_LOGO}</div><h1 style='color:#2b6cff'>{APP_NAME}</h1><p>Enter Protective Password</p><form method='POST'><input type='password' name='pass' placeholder='Protective Password' required><button class='primary'>Unlock</button></form></div>"
+
+@app.route('/main')
+def main_page():
+    if not session.get('unlocked'): return redirect('/')
+    return STYLE + f"<div class='card'><div style='font-size:50px'>{APP_LOGO}</div><h1 style='color:#2b6cff'>{APP_NAME}</h1><a href='/register'><button class='primary'>REGISTER</button></a><br><br><a href='/login'><button class='btn2' style='width:100%'>LOGIN</button></a><br><br><a href='/admin'><button class='btn2' style='width:100%'>ADMIN LOGIN</button></a></div>"
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
@@ -75,15 +90,20 @@ def uploaded_file(filename):
 
 @app.route('/register', methods=['GET','POST'])
 def register():
+    if not session.get('unlocked'): return redirect('/')
     if request.method=='POST':
         db=get_db()
-        db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",(request.form['mobile'],request.form['full_name'],request.form['gender'],request.form['dob'],request.form['email'],request.form['password'],request.form['forget_code'],"Hello World", "Offline"))
-        db.commit()
-        return redirect('/login')
+        try:
+            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",(request.form['mobile'],request.form['full_name'],request.form['gender'],request.form['dob'],request.form['email'],request.form['password'],request.form['forget_code'],"Hello", "Offline"))
+            db.commit()
+            return redirect('/login')
+        except:
+            return "Mobile Already Exists"
     return STYLE + "<div class='card'><h2>Register</h2><form method='POST'><input name='full_name' placeholder='Full Name' required><select name='gender'><option>Male</option><option>Female</option><option>Others</option></select><input name='mobile' placeholder='Mobile' required><input type='date' name='dob' required><input name='email' placeholder='Email' required><input type='password' name='password' placeholder='Password' required><input name='forget_code' placeholder='Code' required><button class='primary'>Submit</button></form></div>"
 
 @app.route('/login', methods=['GET','POST'])
 def login():
+    if not session.get('unlocked'): return redirect('/')
     if request.method=='POST':
         db=get_db()
         u=db.execute("SELECT * FROM users WHERE mobile=? AND password=?",(request.form['mobile'],request.form['password'])).fetchone()
@@ -112,15 +132,13 @@ def dashboard():
             sf.save(os.path.join(UPLOAD_FOLDER,fn))
             db.execute("INSERT INTO stories (mobile,full_name,filename,time) VALUES (?,?,?,?)",(session['mobile'],u[1],fn,time.time()))
             db.commit()
-    # stories - 24h wali
     stories=db.execute("SELECT * FROM stories WHERE time > ?", (time.time()-86400,)).fetchall()
-    story_html="".join([f"<div class='story'><img src='/uploads/{s[3]}'><br><small>{s[2]}</small></div>" for s in stories])
-    return STYLE + f"<div class='card'><b>Welcome, {u[1]} <span class='online-dot'></span></b><br><br><div class='story-bar'>{story_html if story_html else 'No Stories'}</div><br><form method='POST' enctype='multipart/form-data'><input type='file' name='pic' required><input name='caption' placeholder='Caption'><button class='primary'>Post</button></form><br><form method='POST' enctype='multipart/form-data'><input type='file' name='story_pic' required><button class='btn2' style='width:100%'>Add Story (24h)</button></form><hr><a href='/my_posts'><button class='btn2'>My Posts</button></a><a href='/feed'><button class='btn2'>Feed</button></a><a href='/friends'><button class='btn2'>Friends <span class='online-dot'></span></button></a><br><br><a href='/logout'><button class='btn2'>Logout</button></a></div>"
+    story_html="".join([f"<div class='story'><img src='/uploads/{s[3]}'><br><small>{s[2][:6]}</small></div>" for s in stories])
+    return STYLE + f"<div class='card'><b>Welcome, {u[1]} <span class='online-dot'></span> {u[8]}</b><br><br><div class='story-bar'>{story_html if story_html else 'No Stories'}</div><br><form method='POST' enctype='multipart/form-data'><input type='file' name='pic'><input name='caption' placeholder='Caption'><button class='primary'>Post</button></form><br><form method='POST' enctype='multipart/form-data'><input type='file' name='story_pic'><button class='btn2' style='width:100%'>Add Story (24h)</button></form><hr><a href='/my_posts'><button class='btn2'>My Posts</button></a><a href='/feed'><button class='btn2'>Feed</button></a><a href='/friends'><button class='btn2'>Friends</button></a><br><br><a href='/logout'><button class='btn2'>Logout</button></a></div>"
 
 @app.route('/feed')
 def feed():
     if 'mobile' not in session: return redirect('/login')
-    update_online()
     db=get_db()
     posts=db.execute("SELECT * FROM posts ORDER BY id DESC").fetchall()
     html=""
@@ -186,6 +204,44 @@ def chat(mobile):
     msgs=db.execute("SELECT * FROM chats WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?) ORDER BY id",(session['mobile'],mobile,mobile,session['mobile'])).fetchall()
     bubbles="".join([f"<div style='text-align:{'right' if m[1]==session['mobile'] else 'left'};margin:6px'><span style='padding:8px 12px;border-radius:12px;background:{'#2b6cff' if m[1]==session['mobile'] else '#eef3ff'};color:{'#fff' if m[1]==session['mobile'] else '#000'}'>{m[3]}</span></div>" for m in msgs])
     return STYLE + f"<div class='card'><div style='min-height:300px'>{bubbles}</div><form method='POST'><input name='msg' required><button class='primary'>Send</button></form><br><a href='/friends'>Back</a></div>"
+
+@app.route('/admin', methods=['GET','POST'])
+def admin():
+    if not session.get('unlocked'): return redirect('/')
+    if request.method=='POST':
+        if request.form['pass']==ADMIN_PASSWORD:
+            session['is_admin']=True
+            return redirect('/admin')
+        return STYLE + "<div class='card'><h3>❌ Wrong Admin Password</h3><a href='/admin'>Back</a></div>"
+    if not session.get('is_admin'):
+        return STYLE + "<div class='card'><h2>Admin Login</h2><p>Enter Admin Password</p><form method='POST'><input type='password' name='pass' placeholder='Teka@#2607' required><button class='primary'>Login</button></form></div>"
+    db=get_db()
+    users=db.execute("SELECT * FROM users").fetchall()
+    posts=db.execute("SELECT * FROM posts").fetchall()
+    uhtml="".join([f"<div style='text-align:left;border-bottom:1px solid #eee;padding:6px'>{u[1]} - {u[0]} <a href='/admin_del_user/{u[0]}' style='float:right;color:red'>Delete</a></div>" for u in users])
+    phtml="".join([f"<div style='text-align:left;border-bottom:1px solid #eee;padding:6px'>{p[2]} - {p[3][:20]} <a href='/admin_del_post/{p[0]}' style='float:right;color:red'>Delete</a></div>" for p in posts])
+    return STYLE + f"<div class='card'><h2>ADMIN PANEL</h2><p>Protective: {ANIMATION_PASSWORD} | Admin: {ADMIN_PASSWORD}</p><h3>Users ({len(users)})</h3>{uhtml}<h3>Posts ({len(posts)})</h3>{phtml}<br><a href='/main'><button class='btn2'>Back</button></a> <a href='/admin_logout'><button class='btn2'>Admin Logout</button></a></div>"
+
+@app.route('/admin_del_user/<mobile>')
+def admin_del_user(mobile):
+    if not session.get('is_admin'): return redirect('/admin')
+    db=get_db()
+    db.execute("DELETE FROM users WHERE mobile=?",(mobile,))
+    db.commit()
+    return redirect('/admin')
+
+@app.route('/admin_del_post/<int:pid>')
+def admin_del_post(pid):
+    if not session.get('is_admin'): return redirect('/admin')
+    db=get_db()
+    db.execute("DELETE FROM posts WHERE id=?",(pid,))
+    db.commit()
+    return redirect('/admin')
+
+@app.route('/admin_logout')
+def admin_logout():
+    session.pop('is_admin',None)
+    return redirect('/main')
 
 @app.route('/logout')
 def logout():
