@@ -6,9 +6,8 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.secret_key = "pro_version_final"
 
-# ==== PASSWORD YAHI HAI ====
-ANIMATION_PASSWORD = "Shrikanta@1432"  # Protective Password
-ADMIN_PASSWORD = "Teka@#2607"          # Admin Password
+# ==== PASSWORD ====
+ADMIN_PASSWORD = "Teka@#2607"  # Sirf Admin Password rahega
 APP_NAME = "MY APP"
 APP_LOGO = "🎉"
 # ===========================
@@ -67,21 +66,12 @@ button{padding:10px 16px;border:none;border-radius:12px;font-weight:600;cursor:p
 </style>
 """
 
-# ==== PROTECTIVE LOCK ====
-@app.route('/', methods=['GET','POST'])
+@app.route('/')
 def home():
-    if request.method=='POST':
-        if request.form.get('pass')==ANIMATION_PASSWORD:
-            session['unlocked']=True
-            return redirect('/main')
-        return STYLE + "<div class='card'><h3>❌ Wrong Protective Password</h3><a href='/'>Try Again</a></div>"
-    if session.get('unlocked'):
-        return redirect('/main')
-    return STYLE + f"<div class='card'><div style='font-size:50px'>{APP_LOGO}</div><h1 style='color:#2b6cff'>{APP_NAME}</h1><p>Enter Protective Password</p><form method='POST'><input type='password' name='pass' placeholder='Protective Password' required><button class='primary'>Unlock</button></form></div>"
+    return redirect('/main')
 
 @app.route('/main')
 def main_page():
-    if not session.get('unlocked'): return redirect('/')
     return STYLE + f"<div class='card'><div style='font-size:50px'>{APP_LOGO}</div><h1 style='color:#2b6cff'>{APP_NAME}</h1><a href='/register'><button class='primary'>REGISTER</button></a><br><br><a href='/login'><button class='btn2' style='width:100%'>LOGIN</button></a><br><br><a href='/admin'><button class='btn2' style='width:100%'>ADMIN LOGIN</button></a></div>"
 
 @app.route('/uploads/<filename>')
@@ -90,7 +80,6 @@ def uploaded_file(filename):
 
 @app.route('/register', methods=['GET','POST'])
 def register():
-    if not session.get('unlocked'): return redirect('/')
     if request.method=='POST':
         db=get_db()
         try:
@@ -103,15 +92,24 @@ def register():
 
 @app.route('/login', methods=['GET','POST'])
 def login():
-    if not session.get('unlocked'): return redirect('/')
     if request.method=='POST':
         db=get_db()
         u=db.execute("SELECT * FROM users WHERE mobile=? AND password=?",(request.form['mobile'],request.form['password'])).fetchone()
         if u:
             session['mobile']=u[0]
             return redirect('/dashboard')
-        return "Wrong password"
-    return STYLE + "<div class='card'><h2>Login</h2><form method='POST'><input name='mobile' placeholder='Mobile' required><input type='password' name='password' placeholder='Password' required><button class='primary'>Login</button></form></div>"
+        return STYLE + "<div class='card'><h3>❌ Wrong password</h3><a href='/login'>Back</a></div>"
+    return STYLE + """
+    <div class='card'><h2>Login</h2>
+    <form method='POST'>
+    <input name='mobile' placeholder='Mobile' required>
+    <div style='position:relative'>
+    <input id='pwd' type='password' name='password' placeholder='Password' required>
+    <span onclick="let p=document.getElementById('pwd');p.type=p.type=='password'?'text':'password';this.textContent=p.type=='text'?'🙈':'👁️'" style='position:absolute;right:12px;top:14px;cursor:pointer'>👁️</span>
+    </div>
+    <button class='primary'>Login</button>
+    </form></div>
+    """
 
 @app.route('/dashboard', methods=['GET','POST'])
 def dashboard():
@@ -207,20 +205,19 @@ def chat(mobile):
 
 @app.route('/admin', methods=['GET','POST'])
 def admin():
-    if not session.get('unlocked'): return redirect('/')
     if request.method=='POST':
         if request.form['pass']==ADMIN_PASSWORD:
             session['is_admin']=True
             return redirect('/admin')
         return STYLE + "<div class='card'><h3>❌ Wrong Admin Password</h3><a href='/admin'>Back</a></div>"
     if not session.get('is_admin'):
-        return STYLE + "<div class='card'><h2>Admin Login</h2><p>Enter Admin Password</p><form method='POST'><input type='password' name='pass' placeholder='Teka@#2607' required><button class='primary'>Login</button></form></div>"
+        return STYLE + "<div class='card'><h2>Admin Login</h2><p>Enter Admin Password</p><form method='POST'><input type='password' name='pass' placeholder='Admin Password' required><button class='primary'>Login</button></form></div>"
     db=get_db()
     users=db.execute("SELECT * FROM users").fetchall()
     posts=db.execute("SELECT * FROM posts").fetchall()
     uhtml="".join([f"<div style='text-align:left;border-bottom:1px solid #eee;padding:6px'>{u[1]} - {u[0]} <a href='/admin_del_user/{u[0]}' style='float:right;color:red'>Delete</a></div>" for u in users])
     phtml="".join([f"<div style='text-align:left;border-bottom:1px solid #eee;padding:6px'>{p[2]} - {p[3][:20]} <a href='/admin_del_post/{p[0]}' style='float:right;color:red'>Delete</a></div>" for p in posts])
-    return STYLE + f"<div class='card'><h2>ADMIN PANEL</h2><p>Protective: {ANIMATION_PASSWORD} | Admin: {ADMIN_PASSWORD}</p><h3>Users ({len(users)})</h3>{uhtml}<h3>Posts ({len(posts)})</h3>{phtml}<br><a href='/main'><button class='btn2'>Back</button></a> <a href='/admin_logout'><button class='btn2'>Admin Logout</button></a></div>"
+    return STYLE + f"<div class='card'><h2>ADMIN PANEL</h2><h3>Users ({len(users)})</h3>{uhtml}<h3>Posts ({len(posts)})</h3>{phtml}<br><a href='/main'><button class='btn2'>Back</button></a> <a href='/admin_logout'><button class='btn2'>Admin Logout</button></a></div>"
 
 @app.route('/admin_del_user/<mobile>')
 def admin_del_user(mobile):
@@ -247,3 +244,6 @@ def admin_logout():
 def logout():
     session.clear()
     return redirect('/')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
